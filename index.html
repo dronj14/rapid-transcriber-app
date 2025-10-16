@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapid Script Transcriber</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container-card {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .file-upload-box {
+            border: 2px dashed #a0aec0;
+            transition: all 0.2s;
+        }
+        .file-upload-box:hover {
+            border-color: #4299e1;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-2xl bg-white p-8 rounded-xl container-card">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
+            Rapid Script Transcriber
+        </h1>
+        <p class="text-center text-gray-500 mb-8">
+            Upload an audio or video file to generate a text transcript and subtitle file.
+        </p>
+        
+        <!-- UPDATED: Account & Credits Panel -->
+        <div id="creditsPanel" class="p-5 bg-purple-50 rounded-xl mb-6 border border-purple-200">
+            <h3 class="text-lg font-bold text-purple-800 mb-3 flex items-center justify-between">
+                Account & Credits
+                <span id="currentCreditsDisplay" class="text-2xl font-extrabold text-purple-600">0</span>
+            </h3>
+            <p class="text-sm text-gray-600 mb-3">
+                **Cost Rule:** 1 Credit processes up to 10 MB of file size, rounded up.
+                <span class="font-semibold text-purple-600 ml-1">(e.g., 15 MB = 2 credits)</span>
+            </p>
+            <!-- Removed the 'Buy Credits' button -->
+            <p id="fileCostDisplay" class="text-sm font-medium text-gray-700 mt-3 hidden"></p>
+        </div>
+
+        <!-- Step 1: File Upload -->
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                1. Upload Audio/Video File
+            </label>
+            
+            <!-- File Upload Area -->
+            <div class="flex items-center justify-center w-full">
+                <label id="dropArea" for="fileInput" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 file-upload-box">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <svg class="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                        <p id="fileName" class="text-xs text-gray-500">MP3, WAV, MP4, MOV (max 60MB)</p>
+                    </div>
+                    <input id="fileInput" type="file" class="hidden" accept="audio/*,video/*" />
+                </label>
+            </div>
+            <p id="fileError" class="text-sm text-red-500 mt-2 hidden"></p>
+        </div>
+
+        <!-- Step 2: Generate Button -->
+        <div class="mb-6">
+            <button id="generateBtn" disabled class="w-full py-3 px-4 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition duration-150 disabled:bg-gray-400 disabled:cursor-not-allowed" onclick="startTranscription()">
+                <span id="btnText">2. Analyze & Transcribe (Requires Credits)</span>
+                <span id="spinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full ml-2"></span>
+            </button>
+        </div>
+
+        <!-- Status & Output -->
+        <div id="messageBox" class="p-4 bg-yellow-100 text-yellow-800 rounded-lg mb-6 hidden"></div>
+
+        <div id="outputContainer" class="hidden">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">3. Transcription Result</h2>
+
+            <!-- Subtitle Configuration Controls -->
+            <div id="srtConfig" class="p-4 bg-gray-100 rounded-lg mb-4">
+                <h3 class="font-bold text-gray-700 mb-2">Subtitle Configuration</h3>
+                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-3 sm:space-y-0">
+                    <div class="flex-1">
+                        <label for="wordsPerSegment" class="block text-xs font-medium text-gray-600">Words Per Subtitle Segment (WPS)</label>
+                        <input type="number" id="wordsPerSegment" value="12" min="5" max="25" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <p class="text-xs text-gray-500 mt-1">Controls the number of words in each timed subtitle block.</p>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-600">Timing Offset</label>
+                        <p class="text-sm p-2 bg-white border border-gray-300 rounded-md font-semibold text-gray-800">0.3 seconds lag (Fixed)</p>
+                        <p class="text-xs text-gray-500 mt-1">Subtitles are timed to appear **0.3s *after*** the associated audio segment (lag).</p>
+                    </div>
+                </div>
+            </div>
+
+            <textarea id="transcriptOutput" rows="8" class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 resize-none text-sm mb-4" readonly placeholder="Transcription results will appear here..."></textarea>
+            
+            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                <button onclick="downloadFile('txt')" class="flex-1 py-3 px-4 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 transition duration-150">
+                    Download as .txt (Raw Transcript)
+                </button>
+                <button onclick="downloadFile('srt')" class="flex-1 py-3 px-4 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-150">
+                    Download as .srt (Subtitles)
+                </button>
+            </div>
+             <p class="text-sm text-gray-500 mt-4 text-center">
+                <span class="font-bold">Note on .docx:</span> DOCX generation requires complex libraries. We provide simple .txt and .srt (subtitles) which can be easily imported into document/video editors.
+            </p>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // Global variables for Firebase access (required by the execution environment)
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // --- Core Application Logic ---
+        const fileInput = document.getElementById('fileInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const fileNameDisplay = document.getElementById('fileName');
+        const transcriptOutput = document.getElementById('transcriptOutput');
+        const outputContainer = document.getElementById('outputContainer');
+        const messageBox = document.getElementById('messageBox');
+        const fileError = document.getElementById('fileError');
+        const btnText = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const wordsPerSegmentInput = document.getElementById('wordsPerSegment'); 
+        
+        // Credit System Elements
+        const currentCreditsDisplay = document.getElementById('currentCreditsDisplay');
+        const fileCostDisplay = document.getElementById('fileCostDisplay');
+
+
+        // --- Credit System Variables & Constants ---
+        let currentCredits = 0; 
+        let requiredCredits = 0; 
+
+        // Cost/Credit Constants
+        const CREDIT_RATE_MB = 10; // 1 credit per 10 MB
+        const INITIAL_CREDIT_AMOUNT = 10; // New: Initial amount granted to the user
+
+        // File size limit updated to 60MB
+        const MAX_FILE_SIZE_MB = 60; 
+        
+        let uploadedFile = null;
+        let transcriptionResult = '';
+
+        // Function to display messages in the UI
+        function showMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.className = `p-4 rounded-lg mb-6 ${isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`;
+            messageBox.classList.remove('hidden');
+            if (isError) {
+                console.error("APP ERROR:", text);
+            }
+        }
+
+        // --- Credit Logic ---
+
+        // Function to calculate credits needed based on the 10 MB per credit, rounded up rule
+        function calculateCreditsNeeded(fileSizeMB) {
+            if (fileSizeMB === 0) return 0;
+            // Math.ceil(15 / 10) = Math.ceil(1.5) = 2 credits.
+            const credits = Math.ceil(fileSizeMB / CREDIT_RATE_MB);
+            return credits;
+        }
+
+        // Function to update UI display and load/set initial credits
+        function updateCreditDisplay() {
+            // Check if credits have been set before. If not, initialize to 10.
+            let storedCredits = localStorage.getItem('userCredits');
+
+            if (storedCredits === null || storedCredits === undefined) {
+                currentCredits = INITIAL_CREDIT_AMOUNT;
+                localStorage.setItem('userCredits', currentCredits);
+            } else {
+                currentCredits = parseInt(storedCredits, 10);
+            }
+
+            currentCreditsDisplay.textContent = currentCredits;
+            // Update the file cost display if a file is loaded
+            updateFileCostDisplay(); 
+        }
+
+        function updateFileCostDisplay() {
+            if (requiredCredits > 0 && uploadedFile) {
+                const fileSizeMB = uploadedFile.size / 1024 / 1024;
+                const canAfford = currentCredits >= requiredCredits;
+                fileCostDisplay.textContent = `Cost for this file (${fileSizeMB.toFixed(2)} MB): ${requiredCredits} Credits.`;
+                fileCostDisplay.classList.remove('hidden');
+                fileCostDisplay.classList.toggle('text-red-600', !canAfford);
+                fileCostDisplay.classList.toggle('text-green-600', canAfford);
+            } else {
+                fileCostDisplay.classList.add('hidden');
+            }
+        }
+
+        // Removed showBuyCreditsSimulation and simulatePaymentSuccess functions
+
+        // --- File Handling ---
+
+        function handleFile(file) {
+            uploadedFile = file;
+            if (uploadedFile) {
+                fileError.classList.add('hidden');
+                
+                // --- File size check ---
+                const fileSizeMB = uploadedFile.size / 1024 / 1024;
+                if (fileSizeMB > MAX_FILE_SIZE_MB) {
+                    uploadedFile = null;
+                    fileNameDisplay.textContent = 'File too large!';
+                    fileError.textContent = `File size must be under ${MAX_FILE_SIZE_MB}MB.`;
+                    fileError.classList.remove('hidden');
+                    generateBtn.disabled = true;
+                    requiredCredits = 0; // Reset cost
+                    updateFileCostDisplay();
+                    return;
+                }
+                
+                // Calculate cost and check affordability
+                requiredCredits = calculateCreditsNeeded(fileSizeMB);
+                const canAfford = currentCredits >= requiredCredits;
+
+                fileNameDisplay.textContent = `Ready: ${uploadedFile.name} (${fileSizeMB.toFixed(2)} MB)`;
+                generateBtn.disabled = !canAfford;
+
+                if (!canAfford) {
+                    showMessage(`File loaded. This task requires ${requiredCredits} credits. You need ${requiredCredits - currentCredits} more credits.`, true);
+                } else {
+                    showMessage("File uploaded successfully. You can afford this transcription.", false);
+                }
+                updateFileCostDisplay();
+                outputContainer.classList.add('hidden');
+
+            } else {
+                // Placeholder text change
+                fileNameDisplay.textContent = `MP3, WAV, MP4, MOV (max ${MAX_FILE_SIZE_MB}MB)`;
+                generateBtn.disabled = true;
+                requiredCredits = 0; // Reset cost
+                updateFileCostDisplay();
+            }
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleFile(file);
+        });
+
+        // Handle Drag and Drop
+        const dropArea = document.getElementById('dropArea');
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        dropArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('border-blue-500', 'bg-blue-50');
+            
+            // Check if a file was dropped
+            if (e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files; // Update file input state
+                handleFile(file);
+            }
+        });
+
+
+        // Converts a File object to a Base64 string
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Extract the base64 string part after the MIME type prefix
+                    const base64Data = reader.result.split(',')[1];
+                    resolve(base64Data);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // --- LLM API Logic ---
+
+        // Function with exponential backoff for API calls
+        async function fetchWithExponentialBackoff(fetchCall, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetchCall();
+                    if (!response.ok) {
+                        if (response.status === 429 && i < maxRetries - 1) {
+                            // Rate limit, wait and retry
+                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`API error: ${response.statusText} (${response.status})`);
+                    }
+                    return response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        throw error;
+                    }
+                    // Continue to next iteration for retry
+                }
+            }
+            throw new Error("Failed to fetch from API after multiple retries.");
+        }
+
+
+        async function callTranscriptionApi(base64Data, mimeType) {
+            const userQuery = "Transcribe the following audio/video file and provide the full, unedited text transcript.";
+            
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: userQuery },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }
+                ],
+            };
+
+            const fetchCall = () => fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await fetchWithExponentialBackoff(fetchCall);
+
+            const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (text) {
+                return text;
+            } else {
+                throw new Error("Transcription failed to return text content.");
+            }
+        }
+
+        // --- Transcription Orchestration ---
+
+        window.startTranscription = async function() {
+            if (!uploadedFile) {
+                showMessage("Please select a file first to calculate the cost.", true);
+                return;
+            }
+            
+            // --- CREDIT CHECK ---
+            if (requiredCredits === 0) {
+                 requiredCredits = calculateCreditsNeeded(uploadedFile.size / 1024 / 1024);
+            }
+
+            if (currentCredits < requiredCredits) {
+                showMessage(`Insufficient Credits. This task requires ${requiredCredits} credits, but you only have ${currentCredits}.`, true);
+                return;
+            }
+
+            // Deduct credits before starting the process
+            currentCredits -= requiredCredits;
+            localStorage.setItem('userCredits', currentCredits);
+            updateCreditDisplay();
+            
+            // UI state
+            generateBtn.disabled = true;
+            btnText.textContent = "Analyzing Audio...";
+            spinner.classList.remove('hidden');
+            outputContainer.classList.add('hidden');
+            transcriptOutput.value = '';
+            showMessage(`Deducting ${requiredCredits} credits. Starting analysis. This may take a moment for large files...`);
+
+
+            try {
+                const base64Data = await fileToBase64(uploadedFile);
+                const mimeType = uploadedFile.type;
+
+                // Step 1: Call the LLM for the raw transcription
+                const rawTranscript = await callTranscriptionApi(base64Data, mimeType);
+                transcriptionResult = rawTranscript;
+
+                // Step 2: Display the result
+                transcriptOutput.value = transcriptionResult;
+                outputContainer.classList.remove('hidden');
+                showMessage("Transcription complete! You can now download the files.", false);
+
+            } catch (error) {
+                // If transcription fails, the credits were used and will not be automatically refunded.
+                showMessage(`Transcription failed: ${error.message}. Credits were used, but you may retry with a different file.`, true);
+                transcriptionResult = '';
+            } finally {
+                // Re-enable the button if the user can still afford the current task (or has new files to upload)
+                generateBtn.disabled = currentCredits < requiredCredits; 
+                btnText.textContent = "2. Analyze & Transcribe (Requires Credits)";
+                spinner.classList.add('hidden');
+                updateFileCostDisplay();
+            }
+        }
+
+        // --- File Download Functions (for .txt and .srt) ---
+        
+        // Helper function to simulate segmenting the transcript for SRT
+        function generateSrtContent(text) {
+            const words = text.split(/\s+/).filter(w => w.length > 0);
+            let srt = '';
+            let segmentIndex = 1;
+            
+            // Subtitle formatting requirements (now dynamic/updated)
+            // Use the user-defined Words Per Segment (WPS) or default to 12
+            const wordsPerSegment = parseInt(wordsPerSegmentInput.value, 10) || 12;
+            
+            // Safety check for min/max words per segment
+            const clampedWordsPerSegment = Math.min(Math.max(wordsPerSegment, 5), 25);
+
+            const lineDurationMs = 2000; 
+            const offsetMs = 300; // 0.3 seconds delay (lag)
+            
+            // Note: Since we don't have per-word timestamps, we treat the segment length (WPS) 
+            // as the unit for determining when a new subtitle block should appear.
+
+            for (let i = 0; i < words.length; i += clampedWordsPerSegment) {
+                const segment = words.slice(i, i + clampedWordsPerSegment).join(' ');
+                
+                // Calculate base timing (when the audio segment is estimated to start)
+                const baseStartMs = (i / clampedWordsPerSegment) * lineDurationMs;
+
+                // Apply offset (lag) and ensure time doesn't go negative
+                // startMs is the time the subtitle appears, which is baseStartMs + 300ms
+                let startMs = Math.max(0, baseStartMs + offsetMs); 
+                let endMs = startMs + lineDurationMs;
+
+                const formatTime = (ms) => {
+                    const hours = Math.floor(ms / 3600000);
+                    const minutes = Math.floor((ms % 3600000) / 60000);
+                    const seconds = Math.floor((ms % 60000) / 1000);
+                    const milliseconds = ms % 1000;
+                    
+                    const pad = (num) => String(num).padStart(2, '0');
+                    const padMs = (num) => String(num).padStart(3, '0');
+
+                    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${padMs(milliseconds)}`;
+                };
+
+                const startTime = formatTime(startMs);
+                const endTime = formatTime(endMs);
+
+                // Build SRT block (1 line per interval)
+                srt += segmentIndex + "\n";
+                srt += `${startTime} --> ${endTime}\n`;
+                srt += segment + "\n\n";
+
+                segmentIndex++;
+            }
+            return srt;
+        }
+
+        function downloadFile(format) {
+            if (!transcriptionResult) {
+                showMessage("No transcript available to download. Please run the transcription first.", true);
+                return;
+            }
+
+            let content;
+            let mimeType;
+            let filename;
+            const baseFilename = uploadedFile ? uploadedFile.name.replace(/\.[^/.]+$/, "") : "transcript";
+
+            if (format === 'txt') {
+                content = transcriptionResult;
+                mimeType = 'text/plain';
+                filename = `${baseFilename}_transcript.txt`;
+            } else if (format === 'srt') {
+                // Generate a simple SRT file using user config
+                content = generateSrtContent(transcriptionResult);
+                mimeType = 'text/srt';
+                filename = `${baseFilename}_subtitles.srt`;
+            } else {
+                return;
+            }
+
+            // Create a Blob and initiate download (using the standard FileSaver pattern)
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showMessage(`Successfully generated and downloaded ${filename}!`, false);
+        }
+
+        window.downloadFile = downloadFile;
+
+        // Initial setup message & credit load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateCreditDisplay();
+            showMessage("Welcome! Upload your audio/video file to begin the transcription pipeline. You currently have " + currentCredits + " credits.");
+        });
+
+    </script>
+</body>
+</html>
