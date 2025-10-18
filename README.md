@@ -37,4 +37,4 @@ Open your local `index.html` file (or edit it directly on GitHub) and find this 
 ```javascript
 // LLM API Key and URL (Key has been inserted)
 // **NOTE**: Replace this placeholder key with your actual Gemini API Key for transcription to work.
-const apiKey = "AIzaSyBMRBIhCZCBb6K6Muy6BkYax2M1XYCamiw";
+const apiKey = "your google api key here";
