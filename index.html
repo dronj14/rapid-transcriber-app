@@ -3,23 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapid Script Transcriber</title>
+    <title>Rapid Script Transcriber (8MB Limit)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* Proper CDN link for Inter font */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8f9fa;
         }
         .container-card {
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.05); 
         }
         .file-upload-box {
             border: 2px dashed #a0aec0;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .file-upload-box:hover {
             border-color: #4299e1;
+            background-color: #f7fafc; 
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Style for the media player container */
+        #media-player-container {
+            height: auto; 
+            padding: 4px; 
+            background-color: #e2e8f0; 
         }
     </style>
 </head>
@@ -29,494 +50,528 @@
         <h1 class="text-3xl font-extrabold text-gray-800 mb-2 text-center">
             Rapid Script Transcriber
         </h1>
-        <p class="text-center text-gray-500 mb-8">
-            Upload an audio or video file to generate a text transcript and subtitle file.
+        <p class="text-center text-sm text-gray-500 mb-6">
+            Uses the Gemini API for highly accurate, structured transcription.
         </p>
-        
-        <!-- UPDATED: Account & Credits Panel -->
-        <div id="creditsPanel" class="p-5 bg-purple-50 rounded-xl mb-6 border border-purple-200">
-            <h3 class="text-lg font-bold text-purple-800 mb-3 flex items-center justify-between">
-                Account & Credits
-                <span id="currentCreditsDisplay" class="text-2xl font-extrabold text-purple-600">0</span>
-            </h3>
-            <p class="text-sm text-gray-600 mb-3">
-                **Cost Rule:** 1 Credit processes up to 10 MB of file size, rounded up.
-                <span class="font-semibold text-purple-600 ml-1">(e.g., 15 MB = 2 credits)</span>
-            </p>
-            <!-- Removed the 'Buy Credits' button -->
-            <p id="fileCostDisplay" class="text-sm font-medium text-gray-700 mt-3 hidden"></p>
+
+        <div id="message-box" class="mb-6 p-3 rounded-lg text-sm bg-blue-100 text-blue-700" role="alert">To begin, either **upload an audio/video file** and click 'Start Transcription', or click **'Load Demo Transcript'** to test the interface.</div>
+        <div class="text-right text-xs text-gray-500 mb-4">
+            Credits: <span id="credit-display" class="font-bold">100</span>
         </div>
 
-        <!-- Step 1: File Upload -->
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-                1. Upload Audio/Video File
+        <div class="file-upload-box p-6 text-center rounded-lg mb-6">
+            <input type="file" id="fileInput" accept="audio/*,video/*" class="hidden">
+            <label for="fileInput" class="flex flex-col items-center justify-center">
+                <svg class="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 014 4v2a1 1 0 01-1 1h-1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z"></path></svg>
+                <p id="file-status" class="text-gray-600 font-medium text-sm">Click to select file, or drag and drop here.</p>
+                <p class="text-xs text-gray-500 mt-1">MP3, WAV, MP4, MOV, etc. (**Max 8MB**)</p>
             </label>
-            
-            <!-- File Upload Area -->
-            <div class="flex items-center justify-center w-full">
-                <label id="dropArea" for="fileInput" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 file-upload-box">
-                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                        <svg class="w-8 h-8 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
-                        <p id="fileName" class="text-xs text-gray-500">MP3, WAV, MP4, MOV (max 60MB)</p>
-                    </div>
-                    <input id="fileInput" type="file" class="hidden" accept="audio/*,video/*" />
-                </label>
-            </div>
-            <p id="fileError" class="text-sm text-red-500 mt-2 hidden"></p>
         </div>
 
-        <!-- Step 2: Generate Button -->
-        <div class="mb-6">
-            <button id="generateBtn" disabled class="w-full py-3 px-4 bg-blue-500 text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition duration-150 disabled:bg-gray-400 disabled:cursor-not-allowed" onclick="startTranscription()">
-                <span id="btnText">2. Analyze & Transcribe (Requires Credits)</span>
-                <span id="spinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full ml-2"></span>
-            </button>
-        </div>
-
-        <!-- Status & Output -->
-        <div id="messageBox" class="p-4 bg-yellow-100 text-yellow-800 rounded-lg mb-6 hidden"></div>
-
-        <div id="outputContainer" class="hidden">
-            <h2 class="text-xl font-bold text-gray-800 mb-4">3. Transcription Result</h2>
-
-            <!-- Subtitle Configuration Controls -->
-            <div id="srtConfig" class="p-4 bg-gray-100 rounded-lg mb-4">
-                <h3 class="font-bold text-gray-700 mb-2">Subtitle Configuration</h3>
-                <div class="flex flex-col sm:flex-row sm:space-x-4 space-y-3 sm:space-y-0">
-                    <div class="flex-1">
-                        <label for="wordsPerSegment" class="block text-xs font-medium text-gray-600">Words Per Subtitle Segment (WPS)</label>
-                        <input type="number" id="wordsPerSegment" value="12" min="5" max="25" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">Controls the number of words in each timed subtitle block.</p>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-xs font-medium text-gray-600">Timing Offset</label>
-                        <p class="text-sm p-2 bg-white border border-gray-300 rounded-md font-semibold text-gray-800">0.3 seconds lag (Fixed)</p>
-                        <p class="text-xs text-gray-500 mt-1">Subtitles are timed to appear **0.3s *after*** the associated audio segment (lag).</p>
-                    </div>
+        <div class="bg-gray-50 p-4 rounded-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">Settings</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="languageSelect" class="block text-sm font-medium text-gray-700">Source Language (Optional)</label>
+                    <input type="text" id="languageSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border" placeholder="e.g., English, Spanish">
+                </div>
+                <div>
+                    <label for="modelSelect" class="block text-sm font-medium text-gray-700">Model</label>
+                    <select id="modelSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</option>
+                    </select>
                 </div>
             </div>
-
-            <textarea id="transcriptOutput" rows="8" class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 resize-none text-sm mb-4" readonly placeholder="Transcription results will appear here..."></textarea>
-            
-            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-                <button onclick="downloadFile('txt')" class="flex-1 py-3 px-4 bg-green-500 text-white font-semibold rounded-lg shadow-md hover:bg-green-600 transition duration-150">
-                    Download as .txt (Raw Transcript)
-                </button>
-                <button onclick="downloadFile('srt')" class="flex-1 py-3 px-4 bg-indigo-500 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-600 transition duration-150">
-                    Download as .srt (Subtitles)
-                </button>
+            <div class="mt-4 flex items-center">
+                <input id="insertSpeakerTags" type="checkbox" checked="" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <label for="insertSpeakerTags" class="ml-2 block text-sm text-gray-900">
+                    **Insert Speaker Tags** (e.g., Speaker A:, Speaker B:)
+                </label>
             </div>
-             <p class="text-sm text-gray-500 mt-4 text-center">
-                <span class="font-bold">Note on .docx:</span> DOCX generation requires complex libraries. We provide simple .txt and .srt (subtitles) which can be easily imported into document/video editors.
-            </p>
+        </div>
+
+
+        <div class="flex space-x-4 mb-6">
+            <button id="transcribeButton" onclick="transcribeFile()" disabled="" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700 transition duration-150 ease-in-out disabled:bg-blue-300 flex items-center justify-center">
+                <div id="loading-spinner" class="spinner mr-2 hidden"></div>
+                <span id="button-text">Start Transcription</span>
+            </button>
+            <button id="loadDemoButton" onclick="loadDemoTranscript()" class="w-1/3 bg-yellow-500 text-gray-900 py-3 rounded-lg font-bold text-sm hover:bg-yellow-600 transition duration-150 ease-in-out">
+                Load Demo Transcript
+            </button>
+        </div>
+        
+
+        <div id="results-area" class="mt-8 pt-6 border-t border-gray-200 hidden">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Transcription Result</h2>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Full Editable Transcript</label>
+                <textarea id="transcription-output" rows="12" class="w-full p-3 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+            </div>
+
+            <div id="media-player-container" class="mb-6 rounded-lg overflow-hidden shadow-xl"> 
+                <audio id="media-player" controls="" class="w-full object-contain" style="display:none;"></audio>
+                <div id="no-media-message" class="p-4 text-center text-gray-600">Upload a file to load media here.</div>
+            </div>
+            
+            <div class="flex space-x-4">
+                <button onclick="downloadFile('txt')" class="flex-1 bg-green-500 text-white py-2 rounded-lg font-semibold hover:bg-green-600 transition">Download TXT</button>
+                <button onclick="downloadFile('srt')" class="flex-1 bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 transition">Download SRT (Subtitles)</button>
+            </div>
         </div>
 
     </div>
 
-    <script type="module">
-        // Global variables for Firebase access (required by the execution environment)
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-        // --- Core Application Logic ---
-        const fileInput = document.getElementById('fileInput');
-        const generateBtn = document.getElementById('generateBtn');
-        const fileNameDisplay = document.getElementById('fileName');
-        const transcriptOutput = document.getElementById('transcriptOutput');
-        const outputContainer = document.getElementById('outputContainer');
-        const messageBox = document.getElementById('messageBox');
-        const fileError = document.getElementById('fileError');
-        const btnText = document.getElementById('btnText');
-        const spinner = document.getElementById('spinner');
-        const wordsPerSegmentInput = document.getElementById('wordsPerSegment'); 
+    <script>
+        // ====================================================================
+        // API KEY & GLOBALS
+        // ====================================================================
         
-        // Credit System Elements
-        const currentCreditsDisplay = document.getElementById('currentCreditsDisplay');
-        const fileCostDisplay = document.getElementById('fileCostDisplay');
+        let currentCredits = 100;
+        let transcriptionSegments = null; 
+        let uploadedFileName = 'transcript';
+        // CONFIRMED MAX FILE SIZE AT 8MB
+        const MAX_FILE_SIZE_MB = 8; 
+        const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 
-        // --- Credit System Variables & Constants ---
-        let currentCredits = 0; 
-        let requiredCredits = 0; 
+        // LLM API Key and URL (Key has been inserted)
+        // **NOTE**: Replace this placeholder key with your actual Gemini API Key for transcription to work.
+        const apiKey = "AIzaSyBMRBIhCZCBb6K6Muy6BkYax2M1XYCamiw"; 
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`; 
 
-        // Cost/Credit Constants
-        const CREDIT_RATE_MB = 10; // 1 credit per 10 MB
-        const INITIAL_CREDIT_AMOUNT = 10; // New: Initial amount granted to the user
+        // JSON Schema for structured output
+        const JSON_SCHEMA = {
+            type: "object",
+            properties: {
+                transcript_segments: {
+                    type: "array",
+                    description: "A chronological array of transcription segments.",
+                    items: {
+                        type: "object",
+                        properties: {
+                            start_time_seconds: { type: "number", description: "Start time of the segment in seconds." },
+                            end_time_seconds: { type: "number", description: "End time of the segment in seconds." },
+                            speaker_label: { type: "string", description: "Speaker identifier (e.g., 'Speaker A', 'Speaker B')." },
+                            text: { type: "string", description: "The transcribed text of the segment." }
+                        },
+                        required: ["start_time_seconds", "end_time_seconds", "speaker_label", "text"]
+                    }
+                }
+            },
+            required: ["transcript_segments"]
+        };
 
-        // File size limit updated to 60MB
-        const MAX_FILE_SIZE_MB = 60; 
-        
-        let uploadedFile = null;
-        let transcriptionResult = '';
 
-        // Function to display messages in the UI
+        // --- DEMO DATA ---
+        const DEMO_SEGMENTS = [
+            { "start_time_seconds": 0.0, "end_time_seconds": 7.2, "speaker_label": "Speaker A", "text": "Hi, I'm Anne Licano, and I'm the World Bank online editor for Southeast Asia." },
+            { "start_time_seconds": 7.2, "end_time_seconds": 18.8, "speaker_label": "Speaker A", "text": "Last week, people sent us questions through Facebook, Twitter, and the World Bank blog, asking about jobs and education." },
+            { "start_time_seconds": 18.8, "end_time_seconds": 28.8, "speaker_label": "Speaker A", "text": "With us today at the Thailand Creative and Design Center is Mr. Lars Sondergaard, a World Bank Education Specialist." },
+            { "start_time_seconds": 28.8, "end_time_seconds": 31.2, "speaker_label": "Speaker A", "text": "Thank you for joining us, Lars." },
+            { "start_time_seconds": 31.2, "end_time_seconds": 32.0, "speaker_label": "Speaker B", "text": "My pleasure." },
+            { "start_time_seconds": 32.0, "end_time_seconds": 46.8, "speaker_label": "Speaker A", "text": "So we have several interesting questions from around the world. From Brazil, Gustavo asks: What kinds of skills and experiences are considered valuable in today's job market?" },
+            { "start_time_seconds": 46.8, "end_time_seconds": 53.2, "speaker_label": "Speaker B", "text": "Well, the answer varies industry by industry and country by country, region by region." },
+            { "start_time_seconds": 53.2, "end_time_seconds": 69.6, "speaker_label": "Speaker B", "text": "A general answer to it is that employers are increasingly looking for a broad skill set in their employees. This means critical thinking, analytical reasoning, and life skills." },
+            { "start_time_seconds": 69.6, "end_time_seconds": 95.2, "speaker_label": "Speaker B", "text": "In Thailand, we did a survey of Thai firms and asked what are the key skills you are having a hard time finding in potential employees. And the number one skill that they were having a hard time finding was English language skills." },
+            { "start_time_seconds": 95.2, "end_time_seconds": 104.4, "speaker_label": "Speaker A", "text": "This is somehow related to the second question from Kirsten in Singapore. She asks about academic skills versus life skills." },
+            { "start_time_seconds": 104.4, "end_time_seconds": 127.6, "speaker_label": "Speaker A", "text": "She asks: Our education system is very academic-centric. How can we compete with graduates from other countries who may not come from universities that are as strong academically, but who produce graduates with skills that make them stand out?" },
+            { "start_time_seconds": 127.6, "end_time_seconds": 151.2, "speaker_label": "Speaker B", "text": "Well, I think the lesson for everyone in university is that given that firms are looking for this broad set of skills, to make sure that that journey through the university, you as a student take responsibility for building more than just academic skills." },
+            { "start_time_seconds": 151.2, "end_time_seconds": 182.0, "speaker_label": "Speaker B", "text": "And so that means making sure that outside of the classroom, whether on an internship or on some campus activity, volunteering, on the sports field or with your church, you are building some of these life skills that you can then demonstrate to potential employers that you have." },
+            { "start_time_seconds": 182.0, "end_time_seconds": 190.4, "speaker_label": "Speaker A", "text": "From China: How can graduates from non-famous universities compete with those that graduated from well-recognized schools?" },
+            { "start_time_seconds": 190.4, "end_time_seconds": 200.0, "speaker_label": "Speaker B", "text": "I like this question a lot because it points out one of the things that I think need to change in university across the world." },
+            { "start_time_seconds": 200.0, "end_time_seconds": 217.6, "speaker_label": "Speaker B", "text": "And that is the name on your diploma matters a lot more than you being able to demonstrate that during that process of acquiring that diploma, you are now mastering a certain skill set." },
+            { "start_time_seconds": 217.6, "end_time_seconds": 227.6, "speaker_label": "Speaker A", "text": "And how can fresh graduates who have no working experience know that the jobs they are looking for are a good fit?" },
+            { "start_time_seconds": 227.6, "end_time_seconds": 245.2, "speaker_label": "Speaker B", "text": "I think the lesson for everyone who has just graduated or is about to graduate is that the workplace or work life that they are facing is a very different one than our grandparents they faced." },
+            { "start_time_seconds": 245.2, "end_time_seconds": 254.8, "speaker_label": "Speaker B", "text": "In the sense that the first job is likely not to be the job you will stay in your entire career." },
+            { "start_time_seconds": 254.8, "end_time_seconds": 264.8, "speaker_label": "Speaker B", "text": "Most of us will be moving from firm or employer to employer, maybe even change careers several times in our lives." },
+            { "start_time_seconds": 264.8, "end_time_seconds": 292.8, "speaker_label": "Speaker B", "text": "And the important thing I think is is not to look for the perfect fit in that first job, but rather to make sure that the process of graduating is not an abrupt stop to acquiring skills, but that you quickly get involved in some activity that keeps building your skill sets." },
+            { "start_time_seconds": 292.8, "end_time_seconds": 298.0, "speaker_label": "Speaker A", "text": "We still have many questions, but unfortunately, only time for one more." },
+            { "start_time_seconds": 298.0, "end_time_seconds": 310.0, "speaker_label": "Speaker A", "text": "There has been a surge in university enrollment in some countries. Should we put more people into college only to see them jobless after graduation?" },
+            { "start_time_seconds": 310.0, "end_time_seconds": 328.8, "speaker_label": "Speaker B", "text": "It's true. Enrollment in higher education has gone up in almost all countries around the world, and in some instances doubled or tripled or even quadrupled over 10, 20 years." },
+            { "start_time_seconds": 328.8, "end_time_seconds": 341.6, "speaker_label": "Speaker B", "text": "But in most places, it is still the case that completing a university education is a very good investment from the individual's perspective." },
+            { "start_time_seconds": 341.6, "end_time_seconds": 354.8, "speaker_label": "Speaker B", "text": "Meaning the likelihood that you will find a job, and the likelihood that you will make more than you would have otherwise is still much higher." },
+            { "start_time_seconds": 354.8, "end_time_seconds": 373.2, "speaker_label": "Speaker B", "text": "Now this may not be the case forever as more and more people they graduate, this may change, but it is still the case that completing university is a very good investment from the individual's perspective." },
+            { "start_time_seconds": 373.2, "end_time_seconds": 375.2, "speaker_label": "Speaker A", "text": "Thank you for your insights, Lars." },
+            { "start_time_seconds": 375.2, "end_time_seconds": 384.0, "speaker_label": "Speaker A", "text": "Lars will answer the rest of your questions, the World Bank Blog. Thank you very much for watching World Bank Live." }
+        ];
+
+        // ====================================================================
+        // UTILITY FUNCTIONS
+        // ====================================================================
+
         function showMessage(text, isError = false) {
-            messageBox.textContent = text;
-            messageBox.className = `p-4 rounded-lg mb-6 ${isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`;
-            messageBox.classList.remove('hidden');
+            const box = document.getElementById('message-box');
+            box.innerHTML = text;
+            box.classList.remove('hidden', 'bg-blue-100', 'bg-red-100', 'text-blue-700', 'text-red-700');
             if (isError) {
-                console.error("APP ERROR:", text);
+                box.classList.add('bg-red-100', 'text-red-700');
+            } else {
+                box.classList.add('bg-blue-100', 'text-blue-700');
             }
         }
 
-        // --- Credit Logic ---
-
-        // Function to calculate credits needed based on the 10 MB per credit, rounded up rule
-        function calculateCreditsNeeded(fileSizeMB) {
-            if (fileSizeMB === 0) return 0;
-            // Math.ceil(15 / 10) = Math.ceil(1.5) = 2 credits.
-            const credits = Math.ceil(fileSizeMB / CREDIT_RATE_MB);
-            return credits;
-        }
-
-        // Function to update UI display and load/set initial credits
         function updateCreditDisplay() {
-            // Check if credits have been set before. If not, initialize to 10.
-            let storedCredits = localStorage.getItem('userCredits');
-
-            if (storedCredits === null || storedCredits === undefined) {
-                currentCredits = INITIAL_CREDIT_AMOUNT;
-                localStorage.setItem('userCredits', currentCredits);
-            } else {
-                currentCredits = parseInt(storedCredits, 10);
-            }
-
-            currentCreditsDisplay.textContent = currentCredits;
-            // Update the file cost display if a file is loaded
-            updateFileCostDisplay(); 
+            document.getElementById('credit-display').textContent = currentCredits;
         }
 
-        function updateFileCostDisplay() {
-            if (requiredCredits > 0 && uploadedFile) {
-                const fileSizeMB = uploadedFile.size / 1024 / 1024;
-                const canAfford = currentCredits >= requiredCredits;
-                fileCostDisplay.textContent = `Cost for this file (${fileSizeMB.toFixed(2)} MB): ${requiredCredits} Credits.`;
-                fileCostDisplay.classList.remove('hidden');
-                fileCostDisplay.classList.toggle('text-red-600', !canAfford);
-                fileCostDisplay.classList.toggle('text-green-600', canAfford);
+        function toggleLoading(isLoading) {
+            const spinner = document.getElementById('loading-spinner');
+            const buttonText = document.getElementById('button-text');
+            const transcribeButton = document.getElementById('transcribeButton');
+
+            if (isLoading) {
+                spinner.classList.remove('hidden');
+                buttonText.textContent = 'Transcribing...';
+                transcribeButton.disabled = true;
             } else {
-                fileCostDisplay.classList.add('hidden');
-            }
-        }
-
-        // Removed showBuyCreditsSimulation and simulatePaymentSuccess functions
-
-        // --- File Handling ---
-
-        function handleFile(file) {
-            uploadedFile = file;
-            if (uploadedFile) {
-                fileError.classList.add('hidden');
-                
-                // --- File size check ---
-                const fileSizeMB = uploadedFile.size / 1024 / 1024;
-                if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                    uploadedFile = null;
-                    fileNameDisplay.textContent = 'File too large!';
-                    fileError.textContent = `File size must be under ${MAX_FILE_SIZE_MB}MB.`;
-                    fileError.classList.remove('hidden');
-                    generateBtn.disabled = true;
-                    requiredCredits = 0; // Reset cost
-                    updateFileCostDisplay();
-                    return;
+                spinner.classList.add('hidden');
+                buttonText.textContent = 'Start Transcription';
+                const fileInput = document.getElementById('fileInput');
+                if (fileInput.files.length > 0) {
+                    transcribeButton.disabled = false;
                 }
-                
-                // Calculate cost and check affordability
-                requiredCredits = calculateCreditsNeeded(fileSizeMB);
-                const canAfford = currentCredits >= requiredCredits;
-
-                fileNameDisplay.textContent = `Ready: ${uploadedFile.name} (${fileSizeMB.toFixed(2)} MB)`;
-                generateBtn.disabled = !canAfford;
-
-                if (!canAfford) {
-                    showMessage(`File loaded. This task requires ${requiredCredits} credits. You need ${requiredCredits - currentCredits} more credits.`, true);
-                } else {
-                    showMessage("File uploaded successfully. You can afford this transcription.", false);
-                }
-                updateFileCostDisplay();
-                outputContainer.classList.add('hidden');
-
-            } else {
-                // Placeholder text change
-                fileNameDisplay.textContent = `MP3, WAV, MP4, MOV (max ${MAX_FILE_SIZE_MB}MB)`;
-                generateBtn.disabled = true;
-                requiredCredits = 0; // Reset cost
-                updateFileCostDisplay();
             }
         }
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            handleFile(file);
-        });
-
-        // Handle Drag and Drop
-        const dropArea = document.getElementById('dropArea');
-        dropArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropArea.classList.add('border-blue-500', 'bg-blue-50');
-        });
-
-        dropArea.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dropArea.classList.remove('border-blue-500', 'bg-blue-50');
-        });
-
-        dropArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropArea.classList.remove('border-blue-500', 'bg-blue-50');
-            
-            // Check if a file was dropped
-            if (e.dataTransfer.files.length > 0) {
-                const file = e.dataTransfer.files[0];
-                fileInput.files = e.dataTransfer.files; // Update file input state
-                handleFile(file);
-            }
-        });
-
-
-        // Converts a File object to a Base64 string
-        function fileToBase64(file) {
+        function readFileAsBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = () => {
-                    // Extract the base64 string part after the MIME type prefix
-                    const base64Data = reader.result.split(',')[1];
-                    resolve(base64Data);
-                };
+                reader.onload = () => resolve(reader.result.split(',')[1]); 
                 reader.onerror = error => reject(error);
                 reader.readAsDataURL(file);
             });
         }
-
-        // --- LLM API Logic ---
-
-        // Function with exponential backoff for API calls
-        async function fetchWithExponentialBackoff(fetchCall, maxRetries = 5) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetchCall();
-                    if (!response.ok) {
-                        if (response.status === 429 && i < maxRetries - 1) {
-                            // Rate limit, wait and retry
-                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                            continue;
-                        }
-                        throw new Error(`API error: ${response.statusText} (${response.status})`);
-                    }
-                    return response.json();
-                } catch (error) {
-                    if (i === maxRetries - 1) {
-                        throw error;
-                    }
-                    // Continue to next iteration for retry
-                }
-            }
-            throw new Error("Failed to fetch from API after multiple retries.");
+        
+        function formatTime(seconds) {
+            // Converts seconds to the SRT format: HH:MM:SS,mmm
+            const date = new Date(0);
+            date.setSeconds(seconds);
+            
+            const timeString = date.toISOString().substr(11, 8); 
+            // Get milliseconds from the remainder
+            const milliseconds = (seconds % 1).toFixed(3).substring(2); 
+            
+            return `${timeString},${milliseconds}`; 
         }
 
 
-        async function callTranscriptionApi(base64Data, mimeType) {
-            const userQuery = "Transcribe the following audio/video file and provide the full, unedited text transcript.";
+        // ====================================================================
+        // CORE TRANSCRIPTION LOGIC
+        // ====================================================================
+
+        async function callTranscriptionPipeline(file, language) {
+            if (!apiKey || apiKey === "AIzaSyBMRBIhCZCBb6K6Muy6BkYax2M1XYCamiw") {
+                throw new Error("API Key is missing or invalid. Please replace the placeholder key in the script.");
+            }
             
+            const base64Data = await readFileAsBase64(file);
+            const mimeType = file.type || 'application/octet-stream';
+            
+            const prompt = `You are an expert transcriber and speaker identification specialist. Your task is to accurately transcribe the provided audio/video file and segment it by speaker and time.
+            
+            1. **Segment the transcript** into small, logical blocks based on speaker changes or long pauses.
+            2. **Identify speakers** and label them as 'Speaker A', 'Speaker B', etc.
+            3. **Provide exact start and end times** for each segment in seconds (with one decimal place, e.g., 12.3).
+            4. **Strictly follow the provided JSON schema** for the output. Do not include any text outside of the JSON block.
+            
+            ${language ? `The primary language of the content is: ${language}.` : ''}
+            
+            Return ONLY the JSON object.
+            `;
+
             const payload = {
+                model: "gemini-2.5-flash",
                 contents: [
                     {
-                        role: "user",
                         parts: [
-                            { text: userQuery },
-                            {
-                                inlineData: {
-                                    mimeType: mimeType,
-                                    data: base64Data
-                                }
-                            }
+                            { 
+                                inlineData: { 
+                                    mimeType: mimeType, 
+                                    data: base64Data 
+                                } 
+                            },
+                            { text: prompt }
                         ]
                     }
                 ],
+                generationConfig: { 
+                    temperature: 0.1,
+                    responseMimeType: "application/json",
+                    responseSchema: JSON_SCHEMA
+                }
             };
 
-            const fetchCall = () => fetch(apiUrl, {
+            const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            const result = await fetchWithExponentialBackoff(fetchCall);
+            if (!response.ok) {
+                const errorBody = await response.json();
+                console.error("API Error:", errorBody);
+                throw new Error(`API Error: ${response.status} - ${errorBody.error?.message || 'Unknown error'}`);
+            }
 
-            const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const data = await response.json();
             
-            if (text) {
-                return text;
-            } else {
-                throw new Error("Transcription failed to return text content.");
+            if (!data.candidates || data.candidates.length === 0) {
+                throw new Error("Transcription failed: The model returned an empty response.");
+            }
+
+            let jsonString = data.candidates[0].content.parts[0].text;
+            
+            // Robust JSON extraction to strip surrounding text/backticks
+            jsonString = jsonString.replace(/```json\n?|```/g, '').trim(); 
+            
+            try {
+                const result = JSON.parse(jsonString);
+                
+                if (!result.transcript_segments) {
+                    throw new Error("Transcription failed: JSON structure is invalid. Missing 'transcript_segments'.");
+                }
+                
+                return result.transcript_segments;
+
+            } catch (e) {
+                // If parsing fails after clean-up, report the model's exact output
+                console.error("JSON Parsing failed after model response:", e);
+                console.error("Raw JSON String from model:", jsonString);
+                // Providing the raw snippet the user saw to clarify the issue
+                const rawSnippet = jsonString.substring(0, 100).replace(/\n/g, ' '); 
+                throw new Error(`JSON Parsing Failed. The model returned malformed or incomplete data, likely due to a timeout. Try a **shorter file** (e.g., under 4MB). Raw snippet: ${rawSnippet}...`);
             }
         }
 
-        // --- Transcription Orchestration ---
-
-        window.startTranscription = async function() {
-            if (!uploadedFile) {
-                showMessage("Please select a file first to calculate the cost.", true);
+        async function transcribeFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            const language = document.getElementById('languageSelect').value.trim();
+            const insertSpeakerTags = document.getElementById('insertSpeakerTags').checked;
+            
+            if (!file) {
+                showMessage("Please select a file first.", true);
                 return;
             }
             
-            // --- CREDIT CHECK ---
-            if (requiredCredits === 0) {
-                 requiredCredits = calculateCreditsNeeded(uploadedFile.size / 1024 / 1024);
-            }
-
-            if (currentCredits < requiredCredits) {
-                showMessage(`Insufficient Credits. This task requires ${requiredCredits} credits, but you only have ${currentCredits}.`, true);
+            // CONFIRMED MAX FILE SIZE CHECK
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                showMessage(`File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB. Please try a smaller file.`, true);
                 return;
             }
 
-            // Deduct credits before starting the process
-            currentCredits -= requiredCredits;
-            localStorage.setItem('userCredits', currentCredits);
-            updateCreditDisplay();
+            toggleLoading(true);
+            showMessage(`Starting transcription for **${file.name}**... This may take up to 60 seconds.`, false);
             
-            // UI state
-            generateBtn.disabled = true;
-            btnText.textContent = "Analyzing Audio...";
-            spinner.classList.remove('hidden');
-            outputContainer.classList.add('hidden');
-            transcriptOutput.value = '';
-            showMessage(`Deducting ${requiredCredits} credits. Starting analysis. This may take a moment for large files...`);
-
-
             try {
-                const base64Data = await fileToBase64(uploadedFile);
-                const mimeType = uploadedFile.type;
+                const segments = await callTranscriptionPipeline(file, language);
+                transcriptionSegments = segments;
+                uploadedFileName = file.name.split('.').slice(0, -1).join('.');
+                
+                displayFullTranscript(segments, insertSpeakerTags);
+                document.getElementById('results-area').classList.remove('hidden');
 
-                // Step 1: Call the LLM for the raw transcription
-                const rawTranscript = await callTranscriptionApi(base64Data, mimeType);
-                transcriptionResult = rawTranscript;
-
-                // Step 2: Display the result
-                transcriptOutput.value = transcriptionResult;
-                outputContainer.classList.remove('hidden');
-                showMessage("Transcription complete! You can now download the files.", false);
+                showMessage(`Transcription complete! Segments found: **${segments.length}**. You can now edit or download the files.`, false);
 
             } catch (error) {
-                // If transcription fails, the credits were used and will not be automatically refunded.
-                showMessage(`Transcription failed: ${error.message}. Credits were used, but you may retry with a different file.`, true);
-                transcriptionResult = '';
+                console.error("Transcription Error:", error);
+                
+                // Enhanced error message reporting
+                if (error.message.includes("API Key is missing") || error.message.includes("PERMISSION_DENIED") || error.message.includes("403")) {
+                    showMessage("Transcription failed. **CRITICAL ERROR**: Please ensure your API key is correct and has the necessary permissions (check billing/quota).", true);
+                } else {
+                    showMessage(`Transcription failed. Error: **${error.message}**`, true);
+                }
+                transcriptionSegments = null;
             } finally {
-                // Re-enable the button if the user can still afford the current task (or has new files to upload)
-                generateBtn.disabled = currentCredits < requiredCredits; 
-                btnText.textContent = "2. Analyze & Transcribe (Requires Credits)";
-                spinner.classList.add('hidden');
-                updateFileCostDisplay();
+                toggleLoading(false);
             }
         }
 
-        // --- File Download Functions (for .txt and .srt) ---
+        // ====================================================================
+        // DISPLAY & DOWNLOAD LOGIC
+        // ====================================================================
         
-        // Helper function to simulate segmenting the transcript for SRT
-        function generateSrtContent(text) {
-            const words = text.split(/\s+/).filter(w => w.length > 0);
-            let srt = '';
-            let segmentIndex = 1;
+        function loadDemoTranscript() {
+            const insertSpeakerTags = document.getElementById('insertSpeakerTags').checked;
+            transcriptionSegments = DEMO_SEGMENTS;
+            uploadedFileName = 'Demo-Interview-Transcript';
             
-            // Subtitle formatting requirements (now dynamic/updated)
-            // Use the user-defined Words Per Segment (WPS) or default to 12
-            const wordsPerSegment = parseInt(wordsPerSegmentInput.value, 10) || 12;
+            document.getElementById('results-area').classList.remove('hidden');
             
-            // Safety check for min/max words per segment
-            const clampedWordsPerSegment = Math.min(Math.max(wordsPerSegment, 5), 25);
+            // Reset media player for demo mode
+            const mediaPlayer = document.getElementById('media-player');
+            mediaPlayer.src = ''; 
+            mediaPlayer.style.display = 'none'; 
+            
+            const noMediaMessage = document.getElementById('no-media-message');
+            noMediaMessage.style.display = 'block';
+            noMediaMessage.innerHTML = '<p class="text-xl font-bold text-yellow-500 mb-2">DEMO MODE ACTIVE</p> <p>No media file is loaded, but the transcript is ready for viewing/download.</p>';
 
-            const lineDurationMs = 2000; 
-            const offsetMs = 300; // 0.3 seconds delay (lag)
-            
-            // Note: Since we don't have per-word timestamps, we treat the segment length (WPS) 
-            // as the unit for determining when a new subtitle block should appear.
+            displayFullTranscript(transcriptionSegments, insertSpeakerTags);
 
-            for (let i = 0; i < words.length; i += clampedWordsPerSegment) {
-                const segment = words.slice(i, i + clampedWordsPerSegment).join(' ');
+            showMessage("Demo transcript loaded! You can now edit the full text or download the TXT/SRT files.", false);
+        }
+
+        function displayFullTranscript(segments, insertSpeakerTags) {
+            const fullTextOutput = document.getElementById('transcription-output');
+            let fullText = '';
+            
+            segments.forEach((s) => {
+                const text = s.text ? s.text.trim() : '';
+                if (!text) return; 
+
+                const speakerPrefix = insertSpeakerTags ? `${s.speaker_label}: ` : '';
                 
-                // Calculate base timing (when the audio segment is estimated to start)
-                const baseStartMs = (i / clampedWordsPerSegment) * lineDurationMs;
-
-                // Apply offset (lag) and ensure time doesn't go negative
-                // startMs is the time the subtitle appears, which is baseStartMs + 300ms
-                let startMs = Math.max(0, baseStartMs + offsetMs); 
-                let endMs = startMs + lineDurationMs;
-
-                const formatTime = (ms) => {
-                    const hours = Math.floor(ms / 3600000);
-                    const minutes = Math.floor((ms % 3600000) / 60000);
-                    const seconds = Math.floor((ms % 60000) / 1000);
-                    const milliseconds = ms % 1000;
-                    
-                    const pad = (num) => String(num).padStart(2, '0');
-                    const padMs = (num) => String(num).padStart(3, '0');
-
-                    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)},${padMs(milliseconds)}`;
-                };
-
-                const startTime = formatTime(startMs);
-                const endTime = formatTime(endMs);
-
-                // Build SRT block (1 line per interval)
-                srt += segmentIndex + "\n";
-                srt += `${startTime} --> ${endTime}\n`;
-                srt += segment + "\n\n";
-
-                segmentIndex++;
-            }
-            return srt;
+                // Add two new lines between segments for readability in the textarea
+                fullText += (fullText.length > 0 ? '\n\n' : '') + speakerPrefix + text; 
+            });
+            
+            fullTextOutput.value = fullText;
         }
 
         function downloadFile(format) {
-            if (!transcriptionResult) {
-                showMessage("No transcript available to download. Please run the transcription first.", true);
+            if (!transcriptionSegments || transcriptionSegments.length === 0) {
+                showMessage("No transcription data to download.", true);
                 return;
             }
 
-            let content;
-            let mimeType;
-            let filename;
-            const baseFilename = uploadedFile ? uploadedFile.name.replace(/\.[^/.]+$/, "") : "transcript";
-
-            if (format === 'txt') {
-                content = transcriptionResult;
-                mimeType = 'text/plain';
-                filename = `${baseFilename}_transcript.txt`;
-            } else if (format === 'srt') {
-                // Generate a simple SRT file using user config
-                content = generateSrtContent(transcriptionResult);
-                mimeType = 'text/srt';
-                filename = `${baseFilename}_subtitles.srt`;
-            } else {
-                return;
-            }
-
-            // Create a Blob and initiate download (using the standard FileSaver pattern)
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            let content = '';
+            let mimeType = '';
+            let fileName = `${uploadedFileName}.${format}`;
+            const insertSpeakerTags = document.getElementById('insertSpeakerTags').checked;
             
-            showMessage(`Successfully generated and downloaded ${filename}!`, false);
+            if (format === 'txt') {
+                // Use the content directly from the editable textarea
+                content = document.getElementById('transcription-output').value;
+                mimeType = 'text/plain';
+
+            } else if (format === 'srt') {
+                content = transcriptionSegments.map((s, index) => {
+                    const start = formatTime(s.start_time_seconds);
+                    const end = formatTime(s.end_time_seconds);
+                    
+                    let text = s.text.trim();
+                    if (insertSpeakerTags && s.speaker_label) {
+                        text = `${s.speaker_label}: ${text}`;
+                    }
+                    
+                    // SRT format: Sequence Number -> Timecode -> Text
+                    return `${index + 1}\n${start} --> ${end}\n${text}\n`;
+                }).join('\n');
+
+                mimeType = 'application/x-subrip';
+            }
+
+            if (content) {
+                const blob = new Blob([content], { type: `${mimeType};charset=utf-8;` });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+        
+        // Expose global functions (needed for onclick in HTML)
+        window.transcribeFile = transcribeFile;
+        window.loadDemoTranscript = loadDemoTranscript;
+        window.downloadFile = downloadFile;
+        
+        // ====================================================================
+        // INITIALIZATION AND EVENT LISTENERS
+        // ====================================================================
+
+        function preventDefaults (e) {
+            e.preventDefault();
+            e.stopPropagation();
         }
 
-        window.downloadFile = downloadFile;
+        function handleDrop(e) {
+            preventDefaults (e); 
+            const dt = e.dataTransfer;
+            const files = dt.files;
 
-        // Initial setup message & credit load
-        document.addEventListener('DOMContentLoaded', () => {
+            if (files.length > 0) {
+                // Assign dropped files to the file input to trigger the 'change' event
+                document.getElementById('fileInput').files = files;
+                document.getElementById('fileInput').dispatchEvent(new Event('change'));
+            }
+        }
+
+        window.onload = () => {
             updateCreditDisplay();
-            showMessage("Welcome! Upload your audio/video file to begin the transcription pipeline. You currently have " + currentCredits + " credits.");
-        });
 
+            const fileInput = document.getElementById('fileInput');
+            const fileStatus = document.getElementById('file-status');
+            const transcribeButton = document.getElementById('transcribeButton');
+            const mediaPlayer = document.getElementById('media-player');
+            const fileUploadBox = document.querySelector('.file-upload-box');
+
+            // Media Player Error Handler
+            mediaPlayer.addEventListener('error', () => {
+                const file = fileInput.files[0];
+                const fileName = file ? file.name : 'the selected file';
+                showMessage(`**ERROR loading media file**: The browser could not load ${fileName}. **The transcription may still work if you press 'Start Transcription'.**`, true);
+                mediaPlayer.style.display = 'none'; 
+                document.getElementById('no-media-message').style.display = 'block';
+            });
+            
+            // File Input Change Listener (CRITICAL FOR UPLOADER TO WORK)
+            fileInput.addEventListener('change', () => {
+                // Clear old segments and results on new file load
+                transcriptionSegments = null;
+                document.getElementById('transcription-output').value = '';
+
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    if (file.size > MAX_FILE_SIZE_BYTES) {
+                         fileStatus.textContent = `ERROR: File too large. Max is ${MAX_FILE_SIZE_MB}MB.`;
+                         showMessage(`**ERROR**: File size exceeds the limit of ${MAX_FILE_SIZE_MB}MB. Please use a smaller file.`, true);
+                         transcribeButton.disabled = true;
+                         // Hide player and show message on error
+                         mediaPlayer.style.display = 'none'; 
+                         document.getElementById('no-media-message').style.display = 'block';
+                         return;
+                    }
+
+                    fileStatus.textContent = `File Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+                    transcribeButton.disabled = false;
+                    
+                    // Load the file into the media player 
+                    mediaPlayer.src = URL.createObjectURL(file);
+                    mediaPlayer.load();
+                    mediaPlayer.style.display = 'block';
+                    document.getElementById('no-media-message').style.display = 'none';
+
+                    showMessage(`File selected. Click **Start Transcription** to begin.`, false);
+                } else {
+                    fileStatus.textContent = 'Click to select file, or drag and drop here.';
+                    transcribeButton.disabled = true;
+                    // Reset player visibility
+                    mediaPlayer.style.display = 'none'; 
+                    document.getElementById('no-media-message').style.display = 'block';
+                    showMessage("Please upload an audio or video file first.", true);
+                }
+            });
+            
+            // Drag and Drop Listeners
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                fileUploadBox.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            // Visual feedback on drag enter/leave
+            fileUploadBox.addEventListener('dragenter', () => fileUploadBox.classList.add('border-blue-500'));
+            fileUploadBox.addEventListener('dragover', () => fileUploadBox.classList.add('border-blue-500'));
+            fileUploadBox.addEventListener('dragleave', () => fileUploadBox.classList.remove('border-blue-500'));
+            fileUploadBox.addEventListener('drop', () => fileUploadBox.classList.remove('border-blue-500'));
+            
+            // Assign drop handler
+            fileUploadBox.addEventListener('drop', handleDrop, false);
+        };
     </script>
-</body>
-</html>
+
+</body></html>
